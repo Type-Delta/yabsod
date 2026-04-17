@@ -1,0 +1,13 @@
+node_modules/
+lib/esm/
+test/dev/
+test/env/
+dist/
+bin/
+
+.DS_Store
+package-lock.json
+bun.lockb
+bun.lock
+*.cpuprofile
+*.tgz
