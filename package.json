@@ -15,19 +15,39 @@
   "author": "Type-Delta",
   "main": "dist/index.js",
   "bin": {
-    "gdx": "scripts/launcher.cjs"
+    "yabsod": "scripts/launcher.cjs"
   },
   "files": [
     "dist/*.js",
     "scripts/postinstall.cjs",
     "scripts/launcher.cjs",
+    "resources/bugcheck-reference.json",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "prepare-dev": "bun i && bun run transpile-esm",
+    "start": "bun run src/index.ts",
+    "start:node": "tsx src/index.ts",
+    "transpile-esm": "bunx tsc -p lib/tsconfig.json && bun run scripts/transform-tools.mjs",
+    "check": "bun run ts-check && bun run lint && bun run build",
+    "lint": "bun run ts-check && eslint src test scripts --ext .ts -c eslint.config.ts --fix",
+    "build": "bun run transpile-esm && bun build ./src/index.ts --outdir=./dist --target=node --format=esm --production --keep-names",
+    "ts-check": "bunx tsc --noEmit",
+    "package:node": "bun run build",
+    "prepack": "bun run package:node",
+    "postinstall": "node scripts/postinstall.cjs",
+    "scrape:bugchecks": "bun run scripts/scrape-bugchecks.ts",
+    "prettier": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"scripts/**/*.ts\" \"./*.md\"",
+    "test": "bun test"
   },
   "packageManager": "bun@1.3.10",
+  "dependencies": {
+    "reflect-metadata": "^0.2.2",
+    "sqlite3": "^5.1.7",
+    "typeorm": "^0.3.27",
+    "zod": "^4.1.12"
+  },
   "devDependencies": {
     "@babel/cli": "^7.28.6",
     "@babel/core": "^7.29.0",

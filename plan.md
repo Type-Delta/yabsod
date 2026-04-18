@@ -44,6 +44,8 @@ The display layout is grid-based, with sufficient terminal width, graphs may arr
 
 Write crash events/dump into a sqlite database for later retrieval. This command is meant to be run in the background (e.g. as a scheduled task) to keep the crash data up-to-date for `yabsod stats`. It will read crash data from the Event Log and the Reliability Monitor, and store it in a local sqlite database.
 
+This command has `--background` flag, which will reduce CPU resource usage at the cost of speed, for example disable parallel processing, this is meant to be used when running `yabsod jot` in the background (e.g. as a scheduled task), while without this flag, it will run faster but with higher CPU usage, which is meant to be used when the user wants to update the crash data immediately.
+
 here's what the database will store:
 
 - Crash timestamp
@@ -254,6 +256,7 @@ To implement this program, mirror the project structure from `C:\JokaMain\Projec
 Don't blindly copy things from the `gdx` project, as this program has different requirements and constraints.
 
 Here's a list of helper functions and utilities that you can reuse from `gdx` project:
+
 - `ncc()` for handling terminal color and formatting
 - `spinner()` for displaying a spinner in TTY mode
 - `strWrap()` for wrapping long strings to fit within a certain width

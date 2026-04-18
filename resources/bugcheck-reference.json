@@ -1,0 +1,107 @@
+[
+   {
+      "codeHex": "0x0000001E",
+      "codeDec": 30,
+      "name": "KMODE_EXCEPTION_NOT_HANDLED",
+      "description": "A kernel-mode program generated an exception that the error handler did not catch.",
+      "possibleCauses": [
+         "Faulty or incompatible drivers",
+         "Defective RAM",
+         "Kernel stack corruption"
+      ],
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   },
+   {
+      "codeHex": "0x0000003B",
+      "codeDec": 59,
+      "name": "SYSTEM_SERVICE_EXCEPTION",
+      "description": "An exception happened while executing a routine that transitions from non-privileged to privileged code.",
+      "possibleCauses": [
+         "Graphics or storage driver faults",
+         "Memory corruption",
+         "System service routine defects"
+      ],
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   },
+   {
+      "codeHex": "0x00000050",
+      "codeDec": 80,
+      "name": "PAGE_FAULT_IN_NONPAGED_AREA",
+      "description": "Invalid system memory was referenced while nonpaged memory was expected.",
+      "possibleCauses": [
+         "Bad memory hardware",
+         "Filesystem/filter driver bugs",
+         "Anti-virus kernel hooks"
+      ],
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   },
+   {
+      "codeHex": "0x0000007E",
+      "codeDec": 126,
+      "name": "SYSTEM_THREAD_EXCEPTION_NOT_HANDLED",
+      "description": "A system thread generated an exception that the error handler did not catch.",
+      "possibleCauses": [
+         "Driver incompatibilities",
+         "Hardware instability",
+         "Unexpected kernel exceptions"
+      ],
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   },
+   {
+      "codeHex": "0x0000009F",
+      "codeDec": 159,
+      "name": "DRIVER_POWER_STATE_FAILURE",
+      "description": "A driver is in an inconsistent or invalid power state.",
+      "possibleCauses": [
+         "Sleep/hibernate transition bugs",
+         "Outdated chipset/network drivers",
+         "Power management timeouts"
+      ],
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   },
+   {
+      "codeHex": "0x00000116",
+      "codeDec": 278,
+      "name": "VIDEO_TDR_FAILURE",
+      "description": "The display driver failed to recover from a timeout.",
+      "possibleCauses": ["GPU driver crashes", "GPU hardware instability", "Overclocking"],
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   },
+   {
+      "codeHex": "0x00000133",
+      "codeDec": 307,
+      "name": "DPC_WATCHDOG_VIOLATION",
+      "description": "The system spent too long at DISPATCH_LEVEL or above.",
+      "possibleCauses": ["Storage controller firmware bugs", "Driver deadlocks", "Interrupt storm"],
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   },
+   {
+      "codeHex": "0x00000139",
+      "codeDec": 313,
+      "name": "KERNEL_SECURITY_CHECK_FAILURE",
+      "description": "The kernel detected critical data structure corruption.",
+      "possibleCauses": ["Memory corruption", "Driver stack overrun", "Hardware errors"],
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   },
+   {
+      "codeHex": "0x00000154",
+      "codeDec": 340,
+      "name": "UNEXPECTED_STORE_EXCEPTION",
+      "description": "The store component caught an unexpected exception.",
+      "possibleCauses": [
+         "Storage device issues",
+         "Disk controller problems",
+         "Corrupted data structures"
+      ],
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   },
+   {
+      "codeHex": "0x00000157",
+      "codeDec": 343,
+      "name": "KERNEL_THREAD_PRIORITY_FLOOR_VIOLATION",
+      "description": "A kernel thread violated scheduling priority floor constraints.",
+      "possibleCauses": ["Kernel scheduler edge-case", "Third-party kernel extension conflicts"],
+      "infrequent": true,
+      "sourceUrl": "https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2"
+   }
+]
