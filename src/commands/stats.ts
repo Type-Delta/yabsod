@@ -46,7 +46,7 @@ const cmd: CommandModule = {
 
          `${header('BSOD vs App Ratio')}
   BSOD ${ncc(COLOR_PALETTE.blue600)}${summary.selectedRangeBsod}${ncc()} (${bsodPct}%)
-  APP  ${ncc(COLOR_PALETTE.red600)}${summary.selectedRangeApp}${ncc()} (${appPct}%)`,
+  APP  ${ncc(COLOR_PALETTE.rose600)}${summary.selectedRangeApp}${ncc()} (${appPct}%)`,
 
          `${header('Uptime Flex')}
   current: ${summary.currentUptimeDays} days
@@ -68,13 +68,13 @@ const cmd: CommandModule = {
       quickPrint(renderCardGrid(cards, process.stdout.columns || 100));
       quickPrint(renderHeatmap(summary, 52));
       quickPrint('');
-      quickPrint(horizontalBars('Top Problem Hours', topHoursRows, 24, 0x0ea5e9));
+      quickPrint(horizontalBars('Top Problem Hours', topHoursRows, { color: 0x0ea5e9, width: 24 }));
       quickPrint('');
-      quickPrint(horizontalBars('Top Crashed Apps', summary.topApps, 24, COLOR_PALETTE.red600));
+      quickPrint(horizontalBars('Top Crashed Apps', summary.topApps, { color: COLOR_PALETTE.rose600, width: 24 }));
       quickPrint('');
-      quickPrint(horizontalBars('Top BugChecks', summary.topBugChecks, 24, COLOR_PALETTE.blue600));
+      quickPrint(horizontalBars('Top BugChecks', summary.topBugChecks, { color: COLOR_PALETTE.blue600, width: 24 }));
       quickPrint('');
-      quickPrint(horizontalBars('Top BSOD Processes', summary.topProcesses, 24, 0x7c3aed));
+      quickPrint(horizontalBars('Top BSOD Processes', summary.topProcesses, { color: 0x7c3aed, width: 24 }));
 
       if (summary.selectedRangeTotal === 0) {
          warn('No crashes found for this range yet. Run `yabsod jot` first to import events.');

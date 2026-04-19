@@ -4,6 +4,8 @@ import { DEFAULT_SPINNER } from '@/consts';
 import { SpinnerOptions } from '@/types';
 import { ncc } from '@lib/Tools';
 
+export const terminalWidth = process.stdout.columns || 100;
+
 export interface SpinnerContoller {
    stop: () => void;
    start: (newline?: boolean) => void;

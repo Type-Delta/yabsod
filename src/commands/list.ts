@@ -45,7 +45,7 @@ const cmd: CommandModule = {
             );
          } else {
             quickPrint(
-               `  ${ncc(COLOR_PALETTE.red600)}${event.shortId}${ncc()}  ${formatDateTime(event.timestamp)}  APP   ${event.applicationName || 'UnknownApp'}`
+               `  ${ncc(COLOR_PALETTE.rose600)}${event.shortId}${ncc()}  ${formatDateTime(event.timestamp)}  APP   ${event.applicationName || 'UnknownApp'}`
             );
          }
       }

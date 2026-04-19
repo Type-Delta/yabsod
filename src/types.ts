@@ -51,7 +51,8 @@ export interface AchievementState {
    tier: number;
    maxTier: number;
    progress: number;
-   nextGoal?: string;
+   nextGoal?: number;
+   currentGoal: number;
    afterCompletion?: string;
 }
 

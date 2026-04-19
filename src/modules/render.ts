@@ -1,8 +1,16 @@
-import { MathKit, ncc, strWrap } from '@lib/Tools';
+import { CheckCache, MathKit, ncc, strWrap } from '@lib/Tools';
 
 import { StatsSummary } from '@/types';
 import { COLOR_PALETTE } from '@/consts';
 import { colorMixD } from './graphics';
+
+export interface ProgressBarOptions {
+   width?: number;
+   color?: Parameters<typeof ncc>[0];
+   progressNumber?: 'pct' | 'fraction' | 'none';
+}
+
+export type HorizontalBarOptions = Omit<ProgressBarOptions, 'progressNumber'>;
 
 export function header(title: string): string {
    return `${ncc('Bright')}${ncc('Cyan')}${title}${ncc()}`;
@@ -12,30 +20,54 @@ export function formatCount(value: number): string {
    return new Intl.NumberFormat('en-US').format(value);
 }
 
-export function progressBar(value: number, total: number, width = 28): string {
+export function progressBar(value: number, total: number, options: ProgressBarOptions = {}): string {
+   const { width: _width, color = 'White', progressNumber = 'pct' } = options;
    const ratio = total <= 0 ? 0 : MathKit.clamp(value / total, 0, 1);
+
+   let progressText = '';
+   switch (progressNumber) {
+      case 'pct':
+         progressText = `${Math.round(ratio * 100)}%`;
+         break;
+      case 'fraction':
+         progressText = `${formatCount(value)}/${formatCount(total)}`;
+         break;
+      case 'none':
+      default:
+         break;
+   }
+
+   const width = Math.max((_width ?? 28) - progressText.length - 1, progressText.length + 5);
    const exact = width * ratio;
    const full = Math.floor(exact);
    const hasPartial = exact > full && full < width;
+   const supportsColor = !!CheckCache.supportsColor;
+   const emptyBarChar = supportsColor ? ncc() + ncc('Dim') + '━' : '╸';
 
-   const bar = new Array(width).fill('╸');
+   const bar = new Array(width).fill(emptyBarChar) as string[];
    for (let i = 0; i < full; i++) {
+      if (i === 0 && supportsColor && color != null) {
+         bar[i] = `${ncc(color)}━`;
+         continue;
+      }
+
       bar[i] = '━';
    }
 
    if (hasPartial) {
-      bar[full] = '╸';
+      bar[full] = supportsColor && color != null ? emptyBarChar + ncc() + ncc('Dim') : emptyBarChar;
    }
 
-   return `${bar.join('')} ${Math.round(ratio * 100)}%`;
+   return `${bar.join('') + ncc()} ${progressText}`.trim();
 }
 
 export function horizontalBars(
    title: string,
    rows: Array<{ label: string; count: number }>,
-   width = 28,
-   color: number = 0x2b6cb0
+   options: HorizontalBarOptions = {}
 ): string {
+   const { color = 'White', width = 28 } = options;
+
    if (rows.length === 0) {
       return `${header(title)}\n  none yet`;
    }
@@ -75,7 +107,7 @@ export function renderHeatmap(summary: StatsSummary, weeks = 18): string {
    }
 
    rows.push(
-      `Legend: ${ncc(COLOR_PALETTE.blue600)}■${ncc()} bsod ${ncc(COLOR_PALETTE.red600)}■${ncc()} app ${ncc(colorMixD(COLOR_PALETTE.red600, COLOR_PALETTE.blue600, 0.5))}■${ncc()} mixed`
+      `Legend: ${ncc(COLOR_PALETTE.blue600)}■${ncc()} bsod ${ncc(COLOR_PALETTE.rose600)}■${ncc()} app ${ncc(colorMixD(COLOR_PALETTE.rose600, COLOR_PALETTE.blue600, 0.5))}■${ncc()} mixed`
    );
    return rows.join('\n');
 }
@@ -94,12 +126,12 @@ function renderHeatCell(bsod: number, app: number): string {
 
    if (app > 0 && bsod === 0) {
       const intensity = MathKit.clamp(app / 4, 0.25, 1);
-      const red = colorMixD(COLOR_PALETTE.gray400, COLOR_PALETTE.red600, intensity);
+      const red = colorMixD(COLOR_PALETTE.gray400, COLOR_PALETTE.rose600, intensity);
       return `${ncc(red)}■${ncc()}`;
    }
 
    const ratio = bsod / total;
-   const mixed = colorMixD(COLOR_PALETTE.red600, COLOR_PALETTE.blue600, ratio);
+   const mixed = colorMixD(COLOR_PALETTE.rose600, COLOR_PALETTE.blue600, ratio);
    return `${ncc(mixed)}■${ncc()}`;
 }
 

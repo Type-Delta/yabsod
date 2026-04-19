@@ -19,9 +19,6 @@ export class AchievementEntity {
    @Column({ type: 'text' })
    description!: string;
 
-   @Column({ type: 'text' })
-   icon!: string;
-
    @Column({ type: 'integer' })
    unlockedAt!: number;
 

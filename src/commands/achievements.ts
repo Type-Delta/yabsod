@@ -1,9 +1,9 @@
-import { ncc, strWrap } from '@lib/Tools';
+import { ncc, strJustify, strWrap } from '@lib/Tools';
 
 import { CommandModule } from '@/common';
-import { listAchievementStates, markAllAchievementsViewed, tierLabel } from '@/modules/achievements';
+import { achievementLabel, listAchievementStates, markAllAchievementsViewed, tierLabel } from '@/modules/achievements';
 import { progressBar, renderCardGrid } from '@/modules/render';
-import { quickPrint } from '@/modules/shell';
+import { quickPrint, terminalWidth } from '@/modules/shell';
 
 const cmd: CommandModule = {
    async run(ctx) {
@@ -22,9 +22,9 @@ const cmd: CommandModule = {
       const unlocked = achievements.filter((item) => item.status === 'unlocked');
       const locked = achievements.filter((item) => item.status === 'locked');
 
-      quickPrint(`\n${ncc('Bright')}${ncc('Cyan')}YABSOD Achievements${ncc()}`);
-
       if (listMode) {
+         const listDisplayWidth = Math.min(80, terminalWidth - 6);
+
          for (const section of [
             { label: 'Recently Updated', entries: updated },
             { label: 'Unlocked', entries: unlocked },
@@ -34,21 +34,25 @@ const cmd: CommandModule = {
             quickPrint(`\n${ncc('Bright')}${section.label}${ncc()}`);
 
             for (const item of section.entries) {
-               const goal = item.nextGoal ? Number(item.nextGoal) : undefined;
-               const bar = goal
-                  ? progressBar(Math.min(item.progress, goal), goal, 20)
-                  : 'completed';
-               quickPrint(`  ${ncc('Yellow')}${item.name}${ncc()}${tierLabel(item.tier)}`);
-               quickPrint(`    ${item.description}`);
-               quickPrint(`    progress: ${bar}`);
-               if (item.afterCompletion) {
-                  quickPrint(`    after completion: ${item.afterCompletion}`);
-               }
+               const goal = item.nextGoal ? item.nextGoal : item.currentGoal;
+               const bar = progressBar(item.progress, goal, {
+                  width: listDisplayWidth,
+                  progressNumber: 'fraction',
+                  color: item.progress >= goal ? 'Green' : 'White',
+               })
+               quickPrint(`  ${achievementLabel(item)}`);
+               const descriptions = item.afterCompletion ? [item.description, item.afterCompletion] : [item.description];
+               const align = descriptions.length > 1 ? 'spacebetween' : 'left';
+
+               quickPrint('  ' + strJustify(descriptions, listDisplayWidth, {
+                  align,
+               }));
+               quickPrint(`  ${bar}\n`);
             }
          }
       } else {
          const blocks = achievements.map((item) => {
-            const goal = item.nextGoal ? Number(item.nextGoal) : undefined;
+            const goal = item.nextGoal ? item.nextGoal : undefined;
             const compactProgress =
                goal != null
                   ? `${Math.min(item.progress, goal)}/${goal}`
@@ -57,7 +61,7 @@ const cmd: CommandModule = {
                      : `${item.progress}`;
 
             return strWrap(
-               `${ncc('Bright')}${item.name}${ncc()}${tierLabel(item.tier)}
+               `${ncc('Bright')}${item.name}${ncc('White')} ${tierLabel(item.tier)}
 ${ncc('Dim')}${item.status}${ncc()} | ${compactProgress}
 ${item.afterCompletion || item.description}`,
                34

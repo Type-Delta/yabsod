@@ -1,9 +1,11 @@
-import { search } from '@lib/Tools';
+import { ncc, search } from '@lib/Tools';
 
 import { AchievementEntity } from '@/entities/Achievement';
 import { achievementRepo } from '@/modules/db';
 import { getAllEvents } from '@/modules/events';
 import { AchievementState } from '@/types';
+import { COLOR_PALETTE } from '@/consts';
+import { _2PointGradient, colorMixV, decToRgbVec, RgbVec } from './graphics';
 
 interface Definition {
    key: string;
@@ -63,8 +65,8 @@ const DEFINITIONS: Definition[] = [
    {
       key: 'vacation_demanded',
       name: 'Vacation Demanded!',
-      tiers: [2],
-      description: () => '2+ BSODs within 10 minutes',
+      tiers: [2, 4, 8],
+      description: (_, goal) => `${goal}+ BSODs within 10 minutes`,
       progress: (ctx) => ctx.bsodsIn10MinMax,
       afterCompletion: (ctx) => `Peak 10-min BSOD burst: ${ctx.bsodsIn10MinMax}`,
    },
@@ -216,7 +218,6 @@ export async function evaluateAndUnlockAchievements(): Promise<{
          tier,
          name: def.name,
          description: def.description(tier, goal),
-         icon: '',
          unlockedAt: now,
          updatedAt: now,
          viewed: false,
@@ -263,7 +264,8 @@ export async function listAchievementStates(options?: {
       const progress = def.progress(context);
       const tier = achieved?.tier ?? 0;
       const maxTier = def.tiers.length;
-      const nextGoal = tier >= maxTier ? undefined : String(def.tiers[tier]);
+      const nextGoal = tier >= maxTier ? undefined : def.tiers[tier];
+      const currentGoal = tier > 0 ? def.tiers[tier - 1] : def.tiers[0];
       const afterCompletion = achieved?.afterCompletion ?? undefined;
       const status = classifyAchievementStatus(
          {
@@ -274,6 +276,8 @@ export async function listAchievementStates(options?: {
             tier,
             maxTier,
             progress,
+            currentGoal,
+            nextGoal,
          },
          achieved
       );
@@ -290,6 +294,7 @@ export async function listAchievementStates(options?: {
          maxTier,
          progress,
          nextGoal,
+         currentGoal,
          afterCompletion,
       };
    });
@@ -305,8 +310,7 @@ export function classifyAchievementStatus(
    if (!unlockedEntity && state.tier <= 0) return 'locked';
 
    if (!unlockedEntity) return 'unlocked';
-   const weekMs = 7 * 86_400_000;
-   if (Date.now() - unlockedEntity.updatedAt <= weekMs || !unlockedEntity.viewed) {
+   if (Date.now() - unlockedEntity.updatedAt <= 86_400_000 || !unlockedEntity.viewed) {
       return 'updated';
    }
    return 'unlocked';
@@ -316,7 +320,47 @@ export function tierLabel(current: number): string {
    const roman = ['I', 'II', 'III', 'IV', 'V'];
    const targetTier = Math.max(1, current > 0 ? current : 1);
    const suffix = roman[targetTier - 1] ?? String(targetTier);
-   return ` ${suffix}`;
+   return suffix;
+}
+
+export function achievementLabel(state: AchievementState): string {
+   let colorA: RgbVec;
+   let colorB: RgbVec;
+   let tierStr = ncc('Bright') + ' ' + tierLabel(state.tier) + ncc();
+
+   switch (state.tier) {
+      case 2: {
+         const base = decToRgbVec(COLOR_PALETTE.fuchsia400);
+         colorA = base;
+         colorB = colorMixV(base, decToRgbVec(COLOR_PALETTE.blue600), 0.3);
+         break;
+      }
+      case 3:
+      case 4:
+      case 5: {
+         const base = decToRgbVec(COLOR_PALETTE.rose600);
+         colorB = base;
+         colorA = colorMixV(base, decToRgbVec(COLOR_PALETTE.neutral200), 0.36);
+         break;
+      }
+      default: {
+         let base: RgbVec;
+         if (state.maxTier <= 1) {
+            base = decToRgbVec(COLOR_PALETTE.amber500);
+            colorA = base;
+            colorB = colorMixV(base, decToRgbVec(COLOR_PALETTE.rose600), 0.22);
+            tierStr = '';
+            break;
+         }
+
+         base = decToRgbVec(COLOR_PALETTE.teal300);
+         colorA = base;
+         colorB = colorMixV(base, decToRgbVec(COLOR_PALETTE.blue600), 0.36);
+         break;
+      }
+   }
+
+   return `${ncc('Bright') + _2PointGradient(state.name, colorA, colorB, 0.2)}${tierStr}`;
 }
 
 async function buildEvalContext(): Promise<EvalContext> {

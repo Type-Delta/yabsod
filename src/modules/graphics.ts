@@ -1,4 +1,4 @@
-import { MathKit } from "@lib/Tools";
+import { CheckCache, MathKit } from "@lib/Tools";
 
 
 /**
@@ -60,7 +60,81 @@ export function colorMixD(colorA: number, colorB: number, ratio: number): number
    return (r << 16) + (g << 8) + bl;
 }
 
-export function decToRgbVec(dec: number): [number, number, number] {
+export function decToRgbVec(dec: number): RgbVec {
    return [(dec >> 16) & 255, (dec >> 8) & 255, dec & 255];
 }
 
+/**
+ * Returns `text` decorated with an ANSI 24-bit gradient that interpolates
+ * between `colorA` and `colorB` across the character positions defined by
+ * `aPos` and `bPos`.
+ *
+ * Behavior details:
+ * - `text` is treated as a sequence of characters; each character receives
+ *   an ANSI `\x1b[38;2;<r>;<g>;<b>m` color sequence.
+ * - `aPos` and `bPos` are fractional positions in the range [0, 1] that map
+ *   to the start and end character indices (inclusive) of the gradient.
+ *   Defaults: `aPos = 0`, `bPos = 1` (whole string).
+ * - Characters before the start index receive `colorA`; characters after the
+ *   end index receive `colorB`; characters within the range are linearly
+ *   interpolated per-channel and clamped to [0,255]. The string is reset with
+ *   `\x1b[0m` at the end.
+ *
+ * Important notes / edge-cases:
+ * - Input color components are expected to be numeric and roughly in the
+ *   0..255 range for the first three entries of `RgbVec`.
+ *
+ * @param text - The text to apply the gradient to.
+ * @param colorA - Starting color as an `RgbVec` (treated as RGB for ANSI).
+ * @param colorB - Ending color as an `RgbVec` (treated as RGB for ANSI).
+ * @param aPos - Fractional start position of the gradient within `text` (0..1).
+ *               Defaults to `0`.
+ * @param bPos - Fractional end position of the gradient within `text` (0..1).
+ *               Defaults to `1`.
+ * @returns A string containing ANSI 24-bit color escape sequences that, when
+ *          printed to a compatible terminal, display the requested gradient.
+ *
+ * @example
+ * // Simple full-string gradient from red to green:
+ * const out = _2PointGradient('Hello', [255,0,0], [0,255,0]);
+ * console.log(out);
+ */
+export function _2PointGradient(
+   text: string,
+   colorA: RgbVec,
+   colorB: RgbVec,
+   aPos = 0,
+   bPos = 1
+): string {
+   if (aPos < 0) aPos = 0;
+   else if (bPos > 1) bPos = 1;
+   if (!(aPos < bPos) || CheckCache.supportsColor < 3) return text; // no gradient possible
+
+   // calculate gradient indexes
+   const len = text.length;
+   const startIdx = Math.floor(len * aPos);
+   const endIdx = Math.floor(len * bPos);
+   const range = endIdx - startIdx;
+
+   // calculate color step deltas
+   const deltaR = (colorB[0] - colorA[0]) / range;
+   const deltaG = (colorB[1] - colorA[1]) / range;
+   const deltaB = (colorB[2] - colorA[2]) / range;
+
+   let result = '';
+   for (let i = 0; i < len; i++) {
+      if (i < startIdx) {
+         result += `\x1b[38;2;${colorA[0]};${colorA[1]};${colorA[2]}m${text[i]}`;
+      } else if (i >= startIdx && i <= endIdx) {
+         const step = i - startIdx;
+         const r = Math.round(MathKit.clamp(colorA[0] + deltaR * step, 0, 255));
+         const g = Math.round(MathKit.clamp(colorA[1] + deltaG * step, 0, 255));
+         const b = Math.round(MathKit.clamp(colorA[2] + deltaB * step, 0, 255));
+         result += `\x1b[38;2;${r};${g};${b}m${text[i]}`;
+      } else {
+         result += `\x1b[38;2;${colorB[0]};${colorB[1]};${colorB[2]}m${text[i]}`;
+      }
+   }
+   result += `\x1b[0m`; // reset
+   return result;
+}

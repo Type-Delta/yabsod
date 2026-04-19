@@ -61,7 +61,7 @@ function renderDefault(
    const lines: string[] = [];
    lines.push(`${ncc('Bright')}${ncc('Cyan')}Crash Event${ncc()} ${event.shortId}`);
    lines.push(
-      `Type: ${event.crashType === 'bsod' ? `${ncc(COLOR_PALETTE.blue600)}BSOD${ncc()}` : `${ncc(COLOR_PALETTE.red600)}App crash${ncc()}`}`
+      `Type: ${event.crashType === 'bsod' ? `${ncc(COLOR_PALETTE.blue600)}BSOD${ncc()}` : `${ncc(COLOR_PALETTE.rose600)}App crash${ncc()}`}`
    );
    lines.push(`When: ${formatDateTime(event.timestamp)} (${relativeFromNow(event.timestamp)})`);
    lines.push(`Hash: ${event.hashId}`);
