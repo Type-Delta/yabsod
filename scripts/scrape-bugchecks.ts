@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { normalizeBugCheckCode, normalizeBugCheckName } from '@/modules/hash';
 import { spinner } from '@/modules/shell';
+import { conncurrent } from '@/modules/operation';
 
 const BASE_URL = 'https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger';
 const LIST_URL = `${BASE_URL}/bug-check-code-reference2`;
@@ -68,17 +69,17 @@ async function main(): Promise<void> {
     *    <strong>DRIVER_POWER_STATE_FAILURE</strong></a></td>
     * </tr>
     */
-   for (const node of bugCheckCodeTrs) {
+   await conncurrent([...bugCheckCodeTrs], async (node) => {
       const linkEl = node.querySelector('td a[href^="bug-check-"]');
 
       const title = linkEl?.textContent?.trim() || '';
       const codeRaw = node.querySelector('td')?.textContent?.trim() || '';
-      if (!title || !codeRaw) continue;
+      if (!title || !codeRaw) return;
 
       const normalizedCode = normalizeBugCheckCode(codeRaw);
       const normalizedName = normalizeBugCheckName(title);
       const key = `${normalizedCode}|${normalizedName}`;
-      if (seen.has(key)) continue;
+      if (seen.has(key)) return;
       seen.add(key);
 
       const href = linkEl?.getAttribute('href') || '';
@@ -109,7 +110,7 @@ async function main(): Promise<void> {
       }
 
       spinnerCtrl.options.message = `Fetching bug check details... (${found.length}/${bugCheckCodeTrs.length})`;
-   }
+   }, 3);
 
    spinnerCtrl.stop();
 
@@ -123,16 +124,22 @@ async function main(): Promise<void> {
 }
 
 async function fetchDetail(url: string): Promise<BugCheckDetails> {
-   const res = await fetch(url, {
-      headers,
-   });
+   let html: string;
+   if (url.startsWith('http')) {
+      const res = await fetch(url, {
+         headers,
+      });
 
-   if (!res.ok) {
-      throw new Error(`Failed to fetch page ${url}, server responded with ${res.status} ${res.statusText}`);
+      if (!res.ok) {
+         throw new Error(`Failed to fetch page ${url}, server responded with ${res.status} ${res.statusText}`);
+      }
+      html = await res.text();
+      await fs.writeFile(path.join(DUMP_DIR, `bugcheck-details-${url.split('/').pop()}.html`), html, 'utf8');
+   }
+   else {
+      html = await fs.readFile(url, 'utf8');
    }
 
-   const html = await res.text();
-   await fs.writeFile(path.join(DUMP_DIR, `bugcheck-details-${url.split('/').pop()}.html`), html, 'utf8');
    const { document } = parseHTML(html);
    const article = document.body.querySelector(bugCheckDetailArticleSelector);
    if (!article) {
@@ -140,16 +147,28 @@ async function fetchDetail(url: string): Promise<BugCheckDetails> {
    }
 
    // Parse description. The description is usually in the first few <p> tags, we don't know exactly,
-   // but we know that after the description, there will be a <div> tag. So we can use that as a marker to stop parsing description.
+   // but we know that after the description, there will be a <div> or <h2> tag. So we can use that as a marker to stop parsing description.
    // while parsing we might as well tap into the content to check bug check infrequency hints.
    let isInfrequent = false;
-   const descriptionEls = [...article.querySelectorAll<HTMLElement>('p, div')];
-   const nonPElIndex = descriptionEls.findIndex((el) => el.tagName === 'DIV');
+   const descriptionEls = [...article.children]
+      .filter((el) => el.tagName === 'P' || el.tagName === 'DIV' || el.tagName === 'H2');
+   let nonPSkipped = 0, seenP = false;
+   const nonPElIndex = descriptionEls.findIndex((el) => {
+      if (el.tagName !== 'P' && !seenP) {
+         nonPSkipped++;
+         return false;
+      }
+      if (el.tagName === 'P') {
+         seenP = true;
+         return false;
+      }
+      return seenP;
+   });
    const description = descriptionEls
-      .slice(0, nonPElIndex === -1 ? 1 : nonPElIndex)
+      .filter((el) => el.tagName === 'P')
+      .slice(0, nonPElIndex === -1 ? 1 : nonPElIndex - nonPSkipped) // if no non-P element found, just take the first <p> as description
       .map((el) => el.textContent?.trim())
       .filter((v): v is string => {
-         console.log(`"${v}"`);
          if (/appears very infrequently/i.test(v))
             isInfrequent = true;
          return !!v;

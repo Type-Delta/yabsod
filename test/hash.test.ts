@@ -4,8 +4,8 @@ import { hashCrashEvent, normalizeBugCheckCode, normalizeBugCheckName } from '@/
 
 describe('hash module', () => {
    it('normalizes bugcheck codes consistently', () => {
-      expect(normalizeBugCheckCode('0x00000116')).toBe('0x116');
-      expect(normalizeBugCheckCode('278')).toBe('0x116');
+      expect(normalizeBugCheckCode('0x116')).toBe('0x00000116');
+      expect(normalizeBugCheckCode('278')).toBe('0x00000116');
       expect(normalizeBugCheckCode('')).toBe('');
    });
 
