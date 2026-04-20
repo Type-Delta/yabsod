@@ -1,33 +1,49 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-
+import { parseHTML } from 'linkedom';
 import { z } from 'zod';
 
 import { normalizeBugCheckCode, normalizeBugCheckName } from '@/modules/hash';
+import { spinner } from '@/modules/shell';
 
-const LIST_URL =
-   'https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger/bug-check-code-reference2';
-
-const rowRegex =
-   /<a[^>]+href="(?<href>[^"]+)"[^>]*>(?<title>[^<]+)<\/a>[\s\S]*?<td[^>]*>(?<code>0x[0-9A-Fa-f]+|\d+)<\/td>/g;
+const BASE_URL = 'https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger';
+const LIST_URL = `${BASE_URL}/bug-check-code-reference2`;
+const DUMP_DIR = path.resolve(process.cwd(), 'dump');
+const bugCheckCodeTrsSelector = 'h2[id$="bug-check-codes"] ~ table > tbody > tr';
+const bugCheckDetailArticleSelector = 'main div.content:has(p ~ p)';
+const bugCheckDetailArticleParamsSelector = 'h2[id$="parameters"] + table tr td:last-child';
+const bugCheckDetailArticleCauseSelector = 'h2[id="cause"] + p';
+const bugCheckDetailArticleRemarksSelector = 'h2[id="remarks"] + p';
+const bugCheckDetailArticleResolutionSelector = 'h2[id="resolution"] + p';
+const headers = {
+   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0',
+   'Accept-Language': 'en-US,en;q=0.5',
+   'Host': 'learn.microsoft.com',
+   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+}
 
 const EntrySchema = z.object({
    codeHex: z.string(),
    codeDec: z.number().optional(),
    name: z.string(),
    description: z.string(),
-   possibleCauses: z.array(z.string()).optional(),
+   cause: z.string().optional(),
+   resolution: z.string().optional(),
+   remarks: z.string().optional(),
+   parameters: z.array(z.string()).optional(),
    infrequent: z.boolean().optional(),
    sourceUrl: z.string().optional(),
 });
 
 type Entry = z.infer<typeof EntrySchema>;
+type BugCheckDetails = Pick<Entry, 'description' | 'cause' | 'resolution' | 'remarks' | 'parameters' | 'infrequent'>;
 
 async function main(): Promise<void> {
+   await fs.mkdir(DUMP_DIR, { recursive: true });
+
+   const spinnerCtrl = spinner({ message: 'Fetching bug check list...' });
    const res = await fetch(LIST_URL, {
-      headers: {
-         'user-agent': 'yabsod-bugcheck-scraper/0.0.1',
-      },
+      headers,
    });
 
    if (!res.ok) {
@@ -35,12 +51,28 @@ async function main(): Promise<void> {
    }
 
    const html = await res.text();
+   // const html = await fs.readFile('./html-dump.html', 'utf8');
+   await fs.writeFile(path.join(DUMP_DIR, 'bugcheck-list.html'), html, 'utf8');
    const found: Entry[] = [];
    const seen = new Set<string>();
+   const { document } = parseHTML(html);
+   const bugCheckCodeTrs = document.body.querySelectorAll<HTMLTableRowElement>(bugCheckCodeTrsSelector);
 
-   for (const match of html.matchAll(rowRegex)) {
-      const title = decodeHtml(match.groups?.title || '').trim();
-      const codeRaw = (match.groups?.code || '').trim();
+   spinnerCtrl.setMessage(`Fetching bug check details... (0/${bugCheckCodeTrs.length})`);
+
+   /**
+    * Example row:
+    * <tr>
+    * <td>0x0000009F</td>
+    * <td><a href="bug-check-0x9f--driver-power-state-failure" data-linktype="relative-path">
+    *    <strong>DRIVER_POWER_STATE_FAILURE</strong></a></td>
+    * </tr>
+    */
+   for (const node of bugCheckCodeTrs) {
+      const linkEl = node.querySelector('td a[href^="bug-check-"]');
+
+      const title = linkEl?.textContent?.trim() || '';
+      const codeRaw = node.querySelector('td')?.textContent?.trim() || '';
       if (!title || !codeRaw) continue;
 
       const normalizedCode = normalizeBugCheckCode(codeRaw);
@@ -49,27 +81,37 @@ async function main(): Promise<void> {
       if (seen.has(key)) continue;
       seen.add(key);
 
-      const href = match.groups?.href || '';
+      const href = linkEl?.getAttribute('href') || '';
       const url = href.startsWith('http')
          ? href
-         : `https://learn.microsoft.com${href.startsWith('/') ? '' : '/'}${href}`;
+         : `${BASE_URL}${href.startsWith('/') ? '' : '/'}${href}`;
 
-      const detail = await fetchDetail(url).catch(() => ({
-         description: `${title} bug check`,
-         possibleCauses: [],
-         infrequent: false,
-      }));
+      try {
+         const detail = await fetchDetail(url);
+         found.push({
+            codeHex: normalizedCode,
+            codeDec: parseDec(codeRaw),
+            name: normalizedName,
+            sourceUrl: url,
+            ...detail,
+         });
+      } catch (err) {
+         spinnerCtrl.stop();
+         console.warn(`Failed to fetch detail for ${normalizedCode} ${normalizedName} at ${url}: ${(err as Error).message}`);
+         spinnerCtrl.start(false);
+         found.push({
+            codeHex: normalizedCode,
+            codeDec: parseDec(codeRaw),
+            name: normalizedName,
+            sourceUrl: url,
+            description: 'UNAVAILABLE',
+         });
+      }
 
-      found.push({
-         codeHex: normalizedCode,
-         codeDec: parseDec(codeRaw),
-         name: normalizedName,
-         description: detail.description,
-         possibleCauses: detail.possibleCauses,
-         infrequent: detail.infrequent,
-         sourceUrl: url,
-      });
+      spinnerCtrl.options.message = `Fetching bug check details... (${found.length}/${bugCheckCodeTrs.length})`;
    }
+
+   spinnerCtrl.stop();
 
    const validated = EntrySchema.array().parse(found);
    validated.sort((a, b) => a.codeHex.localeCompare(b.codeHex));
@@ -80,32 +122,57 @@ async function main(): Promise<void> {
    console.log(`Saved ${validated.length} bugcheck entries to ${outPath}`);
 }
 
-async function fetchDetail(url: string): Promise<{
-   description: string;
-   possibleCauses: string[];
-   infrequent: boolean;
-}> {
+async function fetchDetail(url: string): Promise<BugCheckDetails> {
    const res = await fetch(url, {
-      headers: {
-         'user-agent': 'yabsod-bugcheck-scraper/0.0.1',
-      },
+      headers,
    });
 
    if (!res.ok) {
-      throw new Error(`Failed to fetch detail ${url}`);
+      throw new Error(`Failed to fetch page ${url}, server responded with ${res.status} ${res.statusText}`);
    }
 
    const html = await res.text();
-   const text = stripHtml(html);
+   await fs.writeFile(path.join(DUMP_DIR, `bugcheck-details-${url.split('/').pop()}.html`), html, 'utf8');
+   const { document } = parseHTML(html);
+   const article = document.body.querySelector(bugCheckDetailArticleSelector);
+   if (!article) {
+      throw new Error(`Failed to find article body in ${url}`);
+   }
 
-   const description = firstParagraph(text) || 'Bug check reference entry';
-   const possibleCauses = extractBulletItems(text).slice(0, 8);
-   const infrequent = /appears very infrequently/i.test(text);
+   // Parse description. The description is usually in the first few <p> tags, we don't know exactly,
+   // but we know that after the description, there will be a <div> tag. So we can use that as a marker to stop parsing description.
+   // while parsing we might as well tap into the content to check bug check infrequency hints.
+   let isInfrequent = false;
+   const descriptionEls = [...article.querySelectorAll<HTMLElement>('p, div')];
+   const nonPElIndex = descriptionEls.findIndex((el) => el.tagName === 'DIV');
+   const description = descriptionEls
+      .slice(0, nonPElIndex === -1 ? 1 : nonPElIndex)
+      .map((el) => el.textContent?.trim())
+      .filter((v): v is string => {
+         console.log(`"${v}"`);
+         if (/appears very infrequently/i.test(v))
+            isInfrequent = true;
+         return !!v;
+      })
+      .join('\n\n');
+
+   if (!description) {
+      throw new Error(`Failed to extract description from ${url}`);
+   }
+
+   const parameters = [...article.querySelectorAll<HTMLElement>(bugCheckDetailArticleParamsSelector)]
+      .map((el) => serializeHtml(el.innerHTML));
+   const cause = article.querySelector(bugCheckDetailArticleCauseSelector)?.textContent?.trim();
+   const resolution = article.querySelector(bugCheckDetailArticleResolutionSelector)?.textContent?.trim();
+   const remarks = article.querySelector(bugCheckDetailArticleRemarksSelector)?.textContent?.trim();
 
    return {
       description,
-      possibleCauses,
-      infrequent,
+      cause,
+      resolution,
+      remarks,
+      parameters,
+      infrequent: isInfrequent,
    };
 }
 
@@ -124,35 +191,16 @@ function decodeHtml(value: string): string {
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
+      .replace(/&#39;/g, "'")
+      .replace(/<br\s*\/?>/gi, '\n');
 }
 
-function stripHtml(html: string): string {
-   return decodeHtml(html)
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-}
-
-function firstParagraph(text: string): string {
-   return text.split('. ').slice(0, 2).join('. ').slice(0, 320);
-}
-
-function extractBulletItems(text: string): string[] {
-   const results: string[] = [];
-   const sentences = text.split('. ');
-   for (const sentence of sentences) {
-      if (/cause|caused|usually|typically|may be/i.test(sentence)) {
-         const cleaned = sentence.trim();
-         if (cleaned.length > 15 && cleaned.length < 200) {
-            results.push(cleaned);
-         }
-      }
-      if (results.length >= 12) break;
-   }
-   return results;
+function serializeHtml(html: string): string {
+   return decodeHtml(html
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, '')
+      .trim());
 }
 
 main().catch((err) => {

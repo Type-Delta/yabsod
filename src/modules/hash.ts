@@ -24,12 +24,12 @@ export function normalizeBugCheckCode(code?: string | null): string {
    if (raw.startsWith('0x') || raw.startsWith('0X')) {
       const numeric = Number.parseInt(raw.slice(2), 16);
       if (Number.isNaN(numeric)) return raw.toUpperCase();
-      return `0x${numeric.toString(16).toUpperCase()}`;
+      return `0x${numeric.toString(16).toUpperCase().padStart(8, '0')}`;
    }
 
    const decimal = Number.parseInt(raw, 10);
    if (Number.isNaN(decimal)) return raw.toUpperCase();
-   return `0x${decimal.toString(16).toUpperCase()}`;
+   return `0x${decimal.toString(16).toUpperCase().padStart(8, '0')}`;
 }
 
 export function normalizeBugCheckName(name?: string | null): string {

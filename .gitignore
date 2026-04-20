@@ -4,6 +4,7 @@ test/dev/
 test/env/
 dist/
 bin/
+dump/
 
 .DS_Store
 package-lock.json
