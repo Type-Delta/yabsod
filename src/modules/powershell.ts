@@ -1,4 +1,5 @@
 import { runCommand } from '@/modules/shell';
+import { IS_WINDOWS } from '@/modules/env';
 
 export async function runPowerShellJson<T>(script: string): Promise<T | null> {
    try {
@@ -16,6 +17,18 @@ export async function runPowerShellJson<T>(script: string): Promise<T | null> {
    } catch {
       return null;
    }
+}
+
+export async function isAdministratorSession(): Promise<boolean> {
+   if (!IS_WINDOWS) return false;
+
+   const script = [
+      '$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())',
+      '$currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator) | ConvertTo-Json -Compress',
+   ].join('; ');
+
+   const result = await runPowerShellJson<boolean>(script);
+   return result === true;
 }
 
 /**

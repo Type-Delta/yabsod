@@ -3,20 +3,45 @@ import { ncc } from '@lib/Tools';
 import { CommandModule } from '@/common';
 import { evaluateAndUnlockAchievements, tierLabel } from '@/modules/achievements';
 import { collectCrashEvents } from '@/modules/crash-sources';
-import { upsertEvents } from '@/modules/events';
-import { quickPrint, info, spinner } from '@/modules/shell';
+import { rehydrateEvents, upsertEvents } from '@/modules/events';
+import { isAdministratorSession } from '@/modules/powershell';
+import { quickPrint, info, spinner, warn } from '@/modules/shell';
 
 const cmd: CommandModule = {
    async run(ctx) {
       const background = !!ctx.args.popOption('--background');
+      const rehydrate = !!ctx.args.popOption('--rehydrate');
       const isTTY = !!process.stdout.isTTY;
+
+      const hasAdmin = await isAdministratorSession();
+      if (!hasAdmin) {
+         warn(
+            'Running without Administrator rights. Some dump/driver metadata may be unavailable. Rerun elevated for best results.'
+         );
+      }
 
       const spin = isTTY ? spinner({ message: 'Scanning Event Log + Reliability Monitor...' }) : null;
       const startedAt = Date.now();
 
       const events = await collectCrashEvents(background);
-      spin?.setMessage('Writing crash events into sqlite...');
-      const writeResult = await upsertEvents(events);
+      spin?.setMessage(rehydrate ? 'Rehydrating crash metadata in sqlite...' : 'Writing crash events into sqlite...');
+
+      let inserted = 0;
+      let skipped = 0;
+      let rehydratedScanned = 0;
+      let rehydratedMatched = 0;
+      let rehydratedUpdated = 0;
+
+      if (rehydrate) {
+         const result = await rehydrateEvents(events);
+         rehydratedScanned = result.scanned;
+         rehydratedMatched = result.matched;
+         rehydratedUpdated = result.updated;
+      } else {
+         const result = await upsertEvents(events);
+         inserted = result.inserted;
+         skipped = result.skipped;
+      }
 
       spin?.setMessage('Evaluating achievements...');
       const achievementResult = await evaluateAndUnlockAchievements();
@@ -26,8 +51,14 @@ const cmd: CommandModule = {
 
       quickPrint(`\n${ncc('Bright')}${ncc('Cyan')}Jot Summary${ncc()}`);
       quickPrint(`  scanned events: ${events.length}`);
-      quickPrint(`  inserted: ${ncc('Green')}${writeResult.inserted}${ncc()}`);
-      quickPrint(`  skipped duplicates: ${writeResult.skipped}`);
+      if (rehydrate) {
+         quickPrint(`  scanned db events: ${rehydratedScanned}`);
+         quickPrint(`  matched events: ${rehydratedMatched}`);
+         quickPrint(`  rehydrated: ${ncc('Green')}${rehydratedUpdated}${ncc()}`);
+      } else {
+         quickPrint(`  inserted: ${ncc('Green')}${inserted}${ncc()}`);
+         quickPrint(`  skipped duplicates: ${skipped}`);
+      }
       quickPrint(`  new achievements: ${ncc('Yellow')}${achievementResult.newlyUnlocked.length}${ncc()}`);
       quickPrint(`  mode: ${background ? 'background (lower resource mode)' : 'fast (parallel mode)'}`);
       quickPrint(`  duration: ${(tookMs / 1000).toFixed(2)}s`);
@@ -39,16 +70,20 @@ const cmd: CommandModule = {
          }
       }
 
-      if (writeResult.inserted === 0) {
+      if (!rehydrate && inserted === 0) {
          info('No new crash events found. Your machine might be behaving today.');
+      }
+
+      if (rehydrate && rehydratedUpdated === 0) {
+         info('No stored events needed metadata refresh.');
       }
 
       return 0;
    },
    help: {
       short: 'Ingest crash data into sqlite database.',
-      usage: 'yabsod jot [--background]',
-      long: 'Reads Event Log + Reliability Monitor, stores normalized crash records, then updates achievements.',
+      usage: 'yabsod jot [--background] [--rehydrate]',
+      long: 'Reads Event Log + Reliability Monitor, stores normalized crash records, optionally rehydrates existing records, then updates achievements.',
    },
 };
 

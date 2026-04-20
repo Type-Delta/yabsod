@@ -20,6 +20,12 @@ export interface UpsertResult {
    entries: CrashEventEntity[];
 }
 
+export interface RehydrateResult {
+   scanned: number;
+   matched: number;
+   updated: number;
+}
+
 export async function upsertEvents(events: CrashEventInput[]): Promise<UpsertResult> {
    const repo = await crashRepo();
 
@@ -47,6 +53,51 @@ export async function upsertEvents(events: CrashEventInput[]): Promise<UpsertRes
    }
 
    return { inserted, skipped, entries };
+}
+
+export async function rehydrateEvents(events: CrashEventInput[]): Promise<RehydrateResult> {
+   const repo = await crashRepo();
+   const stored = await repo.find();
+
+   const byHash = new Map<string, CrashEventInput>();
+   const byReportKey = new Map<string, CrashEventInput[]>();
+
+   for (const event of events) {
+      byHash.set(event.hashId, event);
+
+      const reportId = clean(event.reportId);
+      if (!reportId) continue;
+
+      const key = `${event.crashType}:${reportId.toLowerCase()}`;
+      const bucket = byReportKey.get(key) ?? [];
+      bucket.push(event);
+      byReportKey.set(key, bucket);
+   }
+
+   let matched = 0;
+   const toSave: CrashEventEntity[] = [];
+
+   for (const row of stored) {
+      const candidate = selectBestCandidate(row, byHash, byReportKey);
+      if (!candidate) continue;
+      matched += 1;
+
+      const merged = mergeStoredWithCandidate(row, candidate);
+      if (!isEntityChanged(row, merged)) continue;
+
+      Object.assign(row, merged);
+      toSave.push(row);
+   }
+
+   if (toSave.length > 0) {
+      await repo.save(toSave);
+   }
+
+   return {
+      scanned: stored.length,
+      matched,
+      updated: toSave.length,
+   };
 }
 
 export async function listEvents(filter: EventFilter = {}): Promise<CrashEventEntity[]> {
@@ -296,4 +347,144 @@ function mapInputToEntity(event: CrashEventInput): Omit<CrashEventEntity, 'id'> 
       rawPayload: event.rawPayload ?? null,
       source: 'eventlog',
    };
+}
+
+function selectBestCandidate(
+   stored: CrashEventEntity,
+   byHash: Map<string, CrashEventInput>,
+   byReportKey: Map<string, CrashEventInput[]>
+): CrashEventInput | null {
+   const hashCandidate = byHash.get(stored.hashId);
+   if (hashCandidate) return hashCandidate;
+
+   const reportId = clean(stored.reportId);
+   if (!reportId) return null;
+
+   const key = `${stored.crashType}:${reportId.toLowerCase()}`;
+   const candidates = byReportKey.get(key);
+   if (!candidates || candidates.length === 0) return null;
+
+   let best = candidates[0];
+   let bestDistance = Math.abs(best.timestamp - stored.timestamp);
+   for (let i = 1; i < candidates.length; i++) {
+      const item = candidates[i];
+      const distance = Math.abs(item.timestamp - stored.timestamp);
+      if (distance < bestDistance) {
+         best = item;
+         bestDistance = distance;
+      }
+   }
+
+   return best;
+}
+
+function mergeStoredWithCandidate(
+   stored: CrashEventEntity,
+   candidate: CrashEventInput
+): Omit<CrashEventEntity, 'id'> {
+   return {
+      hashId: stored.hashId,
+      shortId: stored.shortId,
+      timestamp: stored.timestamp,
+      crashType: stored.crashType,
+      applicationName: pickString(candidate.applicationName, stored.applicationName),
+      bugCheckCode: pickString(candidate.bugCheckCode, stored.bugCheckCode),
+      bugCheckName: pickString(candidate.bugCheckName, stored.bugCheckName),
+      processName: pickString(candidate.processName, stored.processName),
+      reportId: pickString(candidate.reportId, stored.reportId),
+      reportStatus: pickString(candidate.reportStatus, stored.reportStatus),
+      stackTrace: pickString(candidate.stackTrace, stored.stackTrace),
+      dumpPaths: mergeStringArrays(candidate.dumpPaths, stored.dumpPaths),
+      relatedEventLogs: mergeStringArrays(candidate.relatedEventLogs, stored.relatedEventLogs),
+      osVersion: pickString(candidate.osVersion, stored.osVersion),
+      osBuild: pickString(candidate.osBuild, stored.osBuild),
+      driverVersion: pickString(candidate.driverVersion, stored.driverVersion),
+      rawPayload: pickRawPayload(candidate.rawPayload, stored.rawPayload),
+      source: stored.source,
+   };
+}
+
+function isEntityChanged(
+   original: CrashEventEntity,
+   next: Omit<CrashEventEntity, 'id'>
+): boolean {
+   return (
+      original.applicationName !== next.applicationName ||
+      original.bugCheckCode !== next.bugCheckCode ||
+      original.bugCheckName !== next.bugCheckName ||
+      original.processName !== next.processName ||
+      original.reportId !== next.reportId ||
+      original.reportStatus !== next.reportStatus ||
+      original.stackTrace !== next.stackTrace ||
+      original.osVersion !== next.osVersion ||
+      original.osBuild !== next.osBuild ||
+      original.driverVersion !== next.driverVersion ||
+      original.rawPayload !== next.rawPayload ||
+      !sameStringArray(original.dumpPaths, next.dumpPaths) ||
+      !sameStringArray(original.relatedEventLogs, next.relatedEventLogs)
+   );
+}
+
+function pickString(
+   candidate: string | null | undefined,
+   fallback: string | null | undefined
+): string | null {
+   const first = clean(candidate);
+   if (first) return first;
+   return clean(fallback);
+}
+
+function pickRawPayload(
+   candidate: string | null | undefined,
+   fallback: string | null | undefined
+): string | null {
+   const a = clean(candidate);
+   const b = clean(fallback);
+   if (!a) return b;
+   if (!b) return a;
+   return a.length >= b.length ? a : b;
+}
+
+function mergeStringArrays(
+   candidate: string[] | null | undefined,
+   fallback: string[] | null | undefined
+): string[] | null {
+   const output: string[] = [];
+   const seen = new Set<string>();
+
+   for (const item of candidate ?? []) {
+      const cleaned = clean(item);
+      if (!cleaned) continue;
+      const key = cleaned.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      output.push(cleaned);
+   }
+
+   for (const item of fallback ?? []) {
+      const cleaned = clean(item);
+      if (!cleaned) continue;
+      const key = cleaned.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      output.push(cleaned);
+   }
+
+   return output.length > 0 ? output : null;
+}
+
+function sameStringArray(a: string[] | null, b: string[] | null): boolean {
+   const left = a ?? [];
+   const right = b ?? [];
+   if (left.length !== right.length) return false;
+   for (let i = 0; i < left.length; i++) {
+      if (left[i] !== right[i]) return false;
+   }
+   return true;
+}
+
+function clean(value: unknown): string | null {
+   if (value == null) return null;
+   const text = String(value).trim();
+   return text || null;
 }

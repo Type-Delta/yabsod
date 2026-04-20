@@ -12,7 +12,7 @@ npm i -g yabsod
 
 ## Commands
 
-- `yabsod jot [--background]` - collect crash events from Windows sources and store in sqlite
+- `yabsod jot [--background] [--rehydrate]` - collect crash events from Windows sources, store in sqlite, or refresh metadata for existing rows
 - `yabsod stats [--range week|month|all-time]` - render crash dashboard with heatmap and bar charts
 - `yabsod achievements [-l|--list] [--updated|--unlocked|--locked] [-f <query>]`
 - `yabsod list [filters...]` - list indexed crash events
