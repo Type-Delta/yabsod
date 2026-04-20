@@ -1,10 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import { z } from 'zod';
-
 import { getCacheDir } from '@/modules/env';
 import { normalizeBugCheckCode, normalizeBugCheckName } from '@/modules/hash';
+import { BugCheckReferenceCacheSchema, BugCheckReferenceEntriesSchema } from '@/schemas';
 import { BugCheckReferenceEntry } from '@/types';
 
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
@@ -12,21 +11,6 @@ const LOCAL_FILE = path.resolve(process.cwd(), 'resources', 'bugcheck-reference.
 const REMOTE_URL =
    process.env.YABSOD_BUGCHECK_REFERENCE_URL ||
    'https://raw.githubusercontent.com/Type-Delta/yabsod/main/resources/bugcheck-reference.json';
-
-const EntrySchema = z.object({
-   codeHex: z.string(),
-   codeDec: z.number().optional(),
-   name: z.string(),
-   description: z.string(),
-   possibleCauses: z.array(z.string()).optional(),
-   infrequent: z.boolean().optional(),
-   sourceUrl: z.string().optional(),
-});
-
-const CacheSchema = z.object({
-   fetchedAt: z.number(),
-   entries: z.array(EntrySchema),
-});
 
 const cacheFilePath = () => path.join(getCacheDir(), 'bugcheck-reference.cache.json');
 
@@ -75,7 +59,7 @@ async function readCache(): Promise<{
    try {
       const content = await fs.readFile(cacheFilePath(), 'utf8');
       const parsed = JSON.parse(content);
-      const validated = CacheSchema.safeParse(parsed);
+      const validated = BugCheckReferenceCacheSchema.safeParse(parsed);
       if (!validated.success) return null;
       return validated.data;
    } catch {
@@ -103,7 +87,7 @@ async function fetchRemoteReference(): Promise<BugCheckReferenceEntry[] | null> 
 
       if (!response.ok) return null;
       const data = await response.json();
-      const parsed = z.array(EntrySchema).safeParse(data);
+      const parsed = BugCheckReferenceEntriesSchema.safeParse(data);
       if (!parsed.success) return null;
       return parsed.data;
    } catch {
@@ -115,7 +99,7 @@ async function readLocalReference(): Promise<BugCheckReferenceEntry[]> {
    try {
       const content = await fs.readFile(LOCAL_FILE, 'utf8');
       const data = JSON.parse(content);
-      const parsed = z.array(EntrySchema).safeParse(data);
+      const parsed = BugCheckReferenceEntriesSchema.safeParse(data);
       if (parsed.success) return parsed.data;
    } catch {
       // fallback below

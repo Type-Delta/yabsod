@@ -1,11 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { parseHTML } from 'linkedom';
-import { z } from 'zod';
 
 import { normalizeBugCheckCode, normalizeBugCheckName } from '@/modules/hash';
 import { spinner } from '@/modules/shell';
 import { conncurrent } from '@/modules/operation';
+import { BugCheckReferenceEntriesSchema } from '@/schemas';
+import { BugCheckReferenceEntry } from '@/types';
 
 const BASE_URL = 'https://learn.microsoft.com/en-us/windows-hardware/drivers/debugger';
 const LIST_URL = `${BASE_URL}/bug-check-code-reference2`;
@@ -23,20 +24,7 @@ const headers = {
    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
 }
 
-const EntrySchema = z.object({
-   codeHex: z.string(),
-   codeDec: z.number().optional(),
-   name: z.string(),
-   description: z.string(),
-   cause: z.string().optional(),
-   resolution: z.string().optional(),
-   remarks: z.string().optional(),
-   parameters: z.array(z.string()).optional(),
-   infrequent: z.boolean().optional(),
-   sourceUrl: z.string().optional(),
-});
-
-type Entry = z.infer<typeof EntrySchema>;
+type Entry = BugCheckReferenceEntry;
 type BugCheckDetails = Pick<Entry, 'description' | 'cause' | 'resolution' | 'remarks' | 'parameters' | 'infrequent'>;
 
 async function main(): Promise<void> {
@@ -114,7 +102,7 @@ async function main(): Promise<void> {
 
    spinnerCtrl.stop();
 
-   const validated = EntrySchema.array().parse(found);
+   const validated = BugCheckReferenceEntriesSchema.parse(found);
    validated.sort((a, b) => a.codeHex.localeCompare(b.codeHex));
 
    const outPath = path.resolve(process.cwd(), 'resources', 'bugcheck-reference.json');

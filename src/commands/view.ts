@@ -85,12 +85,30 @@ function renderDefault(
       lines.push(`${ncc('Bright')}BugCheck Reference${ncc()}`);
       lines.push(`Name: ${bugcheckInfo.name}`);
       lines.push(`Code: ${bugcheckInfo.codeHex}`);
+      if (typeof bugcheckInfo.codeDec === 'number') {
+         lines.push(`Code (dec): ${bugcheckInfo.codeDec}`);
+      }
       lines.push(`Description: ${bugcheckInfo.description}`);
-      if (Array.isArray(bugcheckInfo.possibleCauses) && bugcheckInfo.possibleCauses.length > 0) {
-         lines.push('Possible causes:');
-         for (const cause of bugcheckInfo.possibleCauses.slice(0, 8)) {
-            lines.push(`  - ${cause}`);
+      if (bugcheckInfo.cause) {
+         lines.push(`Cause: ${bugcheckInfo.cause}`);
+      }
+      if (bugcheckInfo.resolution) {
+         lines.push(`Resolution: ${bugcheckInfo.resolution}`);
+      }
+      if (bugcheckInfo.remarks) {
+         lines.push(`Remarks: ${bugcheckInfo.remarks}`);
+      }
+      if (Array.isArray(bugcheckInfo.parameters) && bugcheckInfo.parameters.length > 0) {
+         lines.push('Parameters:');
+         for (const parameter of bugcheckInfo.parameters.slice(0, 8)) {
+            lines.push(`  - ${parameter}`);
          }
+      }
+      if (typeof bugcheckInfo.infrequent === 'boolean') {
+         lines.push(`Infrequent: ${bugcheckInfo.infrequent ? 'Yes' : 'No'}`);
+      }
+      if (bugcheckInfo.sourceUrl) {
+         lines.push(`Source: ${bugcheckInfo.sourceUrl}`);
       }
    }
 
@@ -151,12 +169,30 @@ function renderMarkdown(
       lines.push('## BugCheck Reference');
       lines.push(`- Name: ${bugcheckInfo.name}`);
       lines.push(`- Code: ${bugcheckInfo.codeHex}`);
+      if (typeof bugcheckInfo.codeDec === 'number') {
+         lines.push(`- Code (dec): ${bugcheckInfo.codeDec}`);
+      }
       lines.push(`- Description: ${bugcheckInfo.description}`);
-      if (Array.isArray(bugcheckInfo.possibleCauses) && bugcheckInfo.possibleCauses.length > 0) {
-         lines.push('- Possible causes:');
-         for (const cause of bugcheckInfo.possibleCauses.slice(0, 8)) {
-            lines.push(`  - ${cause}`);
+      if (bugcheckInfo.cause) {
+         lines.push(`- Cause: ${bugcheckInfo.cause}`);
+      }
+      if (bugcheckInfo.resolution) {
+         lines.push(`- Resolution: ${bugcheckInfo.resolution}`);
+      }
+      if (bugcheckInfo.remarks) {
+         lines.push(`- Remarks: ${bugcheckInfo.remarks}`);
+      }
+      if (Array.isArray(bugcheckInfo.parameters) && bugcheckInfo.parameters.length > 0) {
+         lines.push('- Parameters:');
+         for (const parameter of bugcheckInfo.parameters.slice(0, 8)) {
+            lines.push(`  - ${parameter}`);
          }
+      }
+      if (typeof bugcheckInfo.infrequent === 'boolean') {
+         lines.push(`- Infrequent: ${bugcheckInfo.infrequent ? 'Yes' : 'No'}`);
+      }
+      if (bugcheckInfo.sourceUrl) {
+         lines.push(`- Source: ${bugcheckInfo.sourceUrl}`);
       }
    }
 

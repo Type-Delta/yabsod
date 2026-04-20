@@ -1,3 +1,7 @@
+import type { z } from 'zod';
+
+import { BugCheckReferenceEntrySchema } from '@/schemas';
+
 export type CrashType = 'bsod' | 'app';
 
 export type TimeRange = 'week' | 'month' | 'all-time';
@@ -51,15 +55,7 @@ export interface AchievementState {
    afterCompletion?: string;
 }
 
-export interface BugCheckReferenceEntry {
-   codeHex: string;
-   codeDec?: number;
-   name: string;
-   description: string;
-   possibleCauses?: string[];
-   infrequent?: boolean;
-   sourceUrl?: string;
-}
+export type BugCheckReferenceEntry = z.infer<typeof BugCheckReferenceEntrySchema>;
 
 export interface SpinnerOptions {
    /** Message to display next to the spinner */
