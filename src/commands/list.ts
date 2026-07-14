@@ -4,6 +4,7 @@ import { CommandModule } from '@/common';
 import { parseLimit, parseTimeFilter } from '@/modules/args';
 import { formatDateTime } from '@/modules/date';
 import { listEvents } from '@/modules/events';
+import { header } from '@/modules/render';
 import { quickPrint, warn } from '@/modules/shell';
 import { COLOR_PALETTE } from '@/consts';
 
@@ -34,20 +35,41 @@ const cmd: CommandModule = {
          return 0;
       }
 
-      quickPrint(
-         `\n${ncc('Bright')}${ncc('Cyan')}Crash Event List${ncc()} ${ncc('Dim')}(${events.length})${ncc()}`
+      quickPrint('');
+      quickPrint(header(`Crash Events · ${events.length} shown`));
+      quickPrint('');
+
+      const rows = events.map((event) =>
+         event.crashType === 'bsod'
+            ? {
+               id: event.shortId,
+               time: formatDateTime(event.timestamp),
+               type: 'BSOD',
+               color: COLOR_PALETTE.blue600,
+               detail: [event.bugCheckName || event.bugCheckCode || 'UnknownBugCheck', event.processName]
+                  .filter(Boolean)
+                  .join(` ${ncc('Dim')}·${ncc()} `),
+            }
+            : {
+               id: event.shortId,
+               time: formatDateTime(event.timestamp),
+               type: 'APP',
+               color: COLOR_PALETTE.rose600,
+               detail: event.applicationName || 'UnknownApp',
+            }
       );
 
-      for (const event of events) {
-         if (event.crashType === 'bsod') {
-            quickPrint(
-               `  ${ncc(COLOR_PALETTE.blue600)}${event.shortId}${ncc()}  ${formatDateTime(event.timestamp)}  BSOD  ${event.bugCheckName || event.bugCheckCode || 'UnknownBugCheck'}  ${event.processName || ''}`
-            );
-         } else {
-            quickPrint(
-               `  ${ncc(COLOR_PALETTE.rose600)}${event.shortId}${ncc()}  ${formatDateTime(event.timestamp)}  APP   ${event.applicationName || 'UnknownApp'}`
-            );
-         }
+      const idPad = Math.max(...rows.map((row) => row.id.length), 2);
+      const timePad = Math.max(...rows.map((row) => row.time.length), 4);
+
+      quickPrint(
+         `  ${ncc('Dim')}${'ID'.padEnd(idPad)}  ${'TIME'.padEnd(timePad)}  TYPE  DETAIL${ncc()}`
+      );
+
+      for (const row of rows) {
+         quickPrint(
+            `  ${ncc(row.color)}${row.id.padEnd(idPad)}${ncc()}  ${ncc('Dim')}${row.time.padEnd(timePad)}${ncc()}  ${ncc(row.color)}${row.type.padEnd(4)}${ncc()}  ${row.detail}`
+         );
       }
 
       return 0;

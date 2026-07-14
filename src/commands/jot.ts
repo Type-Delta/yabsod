@@ -5,6 +5,7 @@ import { evaluateAndUnlockAchievements, tierLabel } from '@/modules/achievements
 import { collectCrashEvents } from '@/modules/crash-sources';
 import { rehydrateEvents, upsertEvents } from '@/modules/events';
 import { isAdministratorSession } from '@/modules/powershell';
+import { header, kv, panel } from '@/modules/render';
 import { quickPrint, info, spinner, warn } from '@/modules/shell';
 
 const cmd: CommandModule = {
@@ -49,24 +50,28 @@ const cmd: CommandModule = {
 
       const tookMs = Date.now() - startedAt;
 
-      quickPrint(`\n${ncc('Bright')}${ncc('Cyan')}Jot Summary${ncc()}`);
-      quickPrint(`  scanned events: ${events.length}`);
+      const rows: Array<[string, string]> = [['scanned events', String(events.length)]];
       if (rehydrate) {
-         quickPrint(`  scanned db events: ${rehydratedScanned}`);
-         quickPrint(`  matched events: ${rehydratedMatched}`);
-         quickPrint(`  rehydrated: ${ncc('Green')}${rehydratedUpdated}${ncc()}`);
+         rows.push(['scanned db events', String(rehydratedScanned)]);
+         rows.push(['matched events', String(rehydratedMatched)]);
+         rows.push(['rehydrated', `${ncc('Green')}${rehydratedUpdated}${ncc()}`]);
       } else {
-         quickPrint(`  inserted: ${ncc('Green')}${inserted}${ncc()}`);
-         quickPrint(`  skipped duplicates: ${skipped}`);
+         rows.push(['inserted', `${ncc('Green')}${inserted}${ncc()}`]);
+         rows.push(['skipped duplicates', String(skipped)]);
       }
-      quickPrint(`  new achievements: ${ncc('Yellow')}${achievementResult.newlyUnlocked.length}${ncc()}`);
-      quickPrint(`  mode: ${background ? 'background (lower resource mode)' : 'fast (parallel mode)'}`);
-      quickPrint(`  duration: ${(tookMs / 1000).toFixed(2)}s`);
+      rows.push(['new achievements', `${ncc('Yellow')}${achievementResult.newlyUnlocked.length}${ncc()}`]);
+      rows.push(['mode', background ? 'background (lower resource)' : 'fast (parallel)']);
+      rows.push(['duration', `${(tookMs / 1000).toFixed(2)}s`]);
+
+      quickPrint('');
+      quickPrint(panel('Jot Summary', kv(rows), 46));
 
       if (achievementResult.newlyUnlocked.length > 0) {
-         quickPrint(`\n${ncc('Bright')}Unlocked${ncc()}`);
+         quickPrint('');
+         quickPrint(header('Unlocked'));
+         quickPrint('');
          for (const achievement of achievementResult.newlyUnlocked) {
-            quickPrint(`  - ${achievement.name} ${tierLabel(achievement.tier)}`);
+            quickPrint(`  ${ncc('Yellow')}★${ncc()} ${achievement.name} ${tierLabel(achievement.tier)}`);
          }
       }
 

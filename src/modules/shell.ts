@@ -6,6 +6,18 @@ import { ncc } from '@lib/Tools';
 
 export const terminalWidth = process.stdout.columns || 100;
 
+/** Horizontal gutter applied to every printed line, keeps output off the terminal edge. */
+const GUTTER = '  ';
+/** Usable width for layout after left+right gutters. */
+export const contentWidth = terminalWidth - GUTTER.length * 2;
+
+function indent(message: string): string {
+   return message
+      .split('\n')
+      .map((line) => (line ? GUTTER + line : line))
+      .join('\n');
+}
+
 export interface SpinnerContoller {
    stop: () => void;
    start: (newline?: boolean) => void;
@@ -66,7 +78,7 @@ export function spinner(options: SpinnerOptions = {}): SpinnerContoller {
       }
 
       // Clear the current line and move cursor to start then write frame
-      process.stdout.write('\r\x1b[K' + frame);
+      process.stdout.write('\r\x1b[K' + GUTTER + frame);
       frameIndex++;
    };
 
@@ -126,17 +138,17 @@ export async function runCommand(command: string, args: string[], input?: string
 }
 
 export function quickPrint(message: string): void {
-   process.stdout.write(`${message}\n`);
+   process.stdout.write(`${indent(message)}\n`);
 }
 
 export function info(message: string): void {
-   process.stdout.write(`${ncc('Green')}[info]${ncc()} ${message}\n`);
+   process.stdout.write(indent(`${ncc('Green')}●${ncc()} ${message}`) + '\n');
 }
 
 export function warn(message: string): void {
-   process.stderr.write(`${ncc('Yellow')}[warn]${ncc()} ${message}\n`);
+   process.stderr.write(indent(`${ncc('Yellow')}▲${ncc()} ${ncc('Yellow')}warn${ncc()}  ${message}`) + '\n');
 }
 
 export function error(message: string): void {
-   process.stderr.write(`${ncc('Red')}[error]${ncc()} ${message}\n`);
+   process.stderr.write(indent(`${ncc('Red')}✖${ncc()} ${ncc('Red')}error${ncc()} ${message}`) + '\n');
 }

@@ -10,10 +10,92 @@ export interface ProgressBarOptions {
    progressNumber?: 'pct' | 'fraction' | 'none';
 }
 
-export type HorizontalBarOptions = Omit<ProgressBarOptions, 'progressNumber'>;
+export type HorizontalBarOptions = Omit<ProgressBarOptions, 'progressNumber'> & {
+   /** Labels longer than this are stacked on their own line above the bar. */
+   maxLabel?: number;
+};
 
-export function header(title: string): string {
-   return `${ncc('Bright')}${ncc('Cyan')}${title}${ncc()}`;
+/**
+ * Calm section header: `── Title ────────────`
+ * Dim rule with a bright title, the shared visual anchor of every command.
+ */
+export function header(title: string, width = 48): string {
+   const dim = ncc('Dim');
+   const reset = ncc();
+   const tail = Math.max(2, width - stripAnsi(title).length - 5);
+   return `${dim}──${reset} ${ncc('Bright')}${title}${reset} ${dim}${'─'.repeat(tail)}${reset}`;
+}
+
+/**
+ * Aligned key/value rows with dim keys:
+ * ```
+ * today      3
+ * all-time   128
+ * ```
+ */
+export function kv(rows: Array<[string, string]>, indent = ''): string {
+   const pad = Math.max(...rows.map(([key]) => key.length), 0);
+   return rows
+      .map(([key, value]) => `${indent}${ncc('Dim')}${key.padEnd(pad)}${ncc()}  ${value}`)
+      .join('\n');
+}
+
+/**
+ * Rounded panel with a dim border and the title embedded in the top edge:
+ * ```
+ * ╭─ Title ─────────╮
+ * │ content         │
+ * ╰─────────────────╯
+ * ```
+ * Every returned line is exactly `width` visible characters wide.
+ */
+export function panel(title: string, content: string, width = 36): string {
+   const dim = ncc('Dim');
+   const reset = ncc();
+   const inner = width - 4;
+
+   const lines = content
+      .split('\n')
+      .flatMap((line) =>
+         stripAnsi(line).length > inner
+            ? strWrap(line, inner, { mode: 'strict' }).split('\n')
+            : [line]
+      );
+
+   const titleLen = title ? stripAnsi(title).length + 2 : 0;
+   const top = title
+      ? `${dim}╭─${reset} ${ncc('Bright')}${title}${reset} ${dim}${'─'.repeat(Math.max(0, width - titleLen - 3))}╮${reset}`
+      : `${dim}╭${'─'.repeat(width - 2)}╮${reset}`;
+   const bottom = `${dim}╰${'─'.repeat(width - 2)}╯${reset}`;
+   const body = lines.map((line) => `${dim}│${reset} ${padAnsi(line, inner)} ${dim}│${reset}`);
+
+   return [top, ...body, bottom].join('\n');
+}
+
+/**
+ * Lays fixed-width panels out in columns that fit the terminal.
+ * Panels must have uniform visible width (as produced by `panel()`).
+ */
+export function panelGrid(panels: string[], termWidth: number, panelWidth: number, gap = 2): string {
+   if (panels.length === 0) return '';
+   const cols = Math.max(1, Math.floor((termWidth + gap) / (panelWidth + gap)));
+   if (cols === 1) return panels.join('\n');
+
+   const blocks = panels.map((p) => p.split('\n'));
+   const rows: string[] = [];
+   for (let i = 0; i < blocks.length; i += cols) {
+      const chunk = blocks.slice(i, i + cols);
+      const maxLines = Math.max(...chunk.map((lines) => lines.length));
+      for (let lineIndex = 0; lineIndex < maxLines; lineIndex++) {
+         rows.push(
+            chunk
+               .map((lines) => padAnsi(lines[lineIndex] ?? '', panelWidth))
+               .join(' '.repeat(gap))
+               .trimEnd()
+         );
+      }
+   }
+   return rows.join('\n');
 }
 
 export function formatCount(value: number): string {
@@ -66,41 +148,80 @@ export function horizontalBars(
    rows: Array<{ label: string; count: number }>,
    options: HorizontalBarOptions = {}
 ): string {
-   const { color = 'White', width = 28 } = options;
+   const { color = 'White', width = 28, maxLabel = 18 } = options;
 
    if (rows.length === 0) {
-      return `${header(title)}\n  none yet`;
+      return `${header(title)}\n  ${ncc('Dim')}none yet${ncc()}`;
    }
 
    const max = Math.max(...rows.map((row) => row.count), 1);
-   const labelPad = Math.max(...rows.map((row) => row.label.length), 3);
-   const lines = rows.map((row) => {
+   const inlineRows = rows.filter((row) => row.label.length <= maxLabel);
+   const labelPad = Math.max(...inlineRows.map((row) => row.label.length), 3);
+   const lines = rows.flatMap((row) => {
       const barLen = Math.max(1, Math.round((row.count / max) * width));
-      return `  ${row.label.padEnd(labelPad)} ${ncc(color)}${'█'.repeat(barLen)}${ncc()} ${row.count}`;
+      const rest = width - barLen;
+      const bar = `${ncc(color)}${'▮'.repeat(barLen)}${ncc('Dim')}${'▯'.repeat(rest)}${ncc()}  ${row.count}`;
+
+      if (row.label.length > maxLabel) {
+         return [
+            `  ${ncc('Dim')}${row.label}${ncc()}`,
+            `  ${' '.repeat(labelPad)}  ${bar}`,
+         ];
+      }
+
+      return [`  ${ncc('Dim')}${row.label.padEnd(labelPad)}${ncc()}  ${bar}`];
    });
 
    return `${header(title)}\n${lines.join('\n')}`;
 }
 
-export function renderHeatmap(summary: StatsSummary, weeks = 18): string {
-   const dayMap = new Map(summary.heatmapDays.map((entry) => [entry.date, entry]));
-   const now = new Date();
-   const start = new Date(now);
-   start.setDate(start.getDate() - weeks * 7);
-   start.setHours(0, 0, 0, 0);
+export function renderHeatmap(summary: StatsSummary, maxWeeks = 52, width = 100): string {
+   const COL_WIDTH = 2; // '■ '
+   const LABEL_WIDTH = 4; // 'Mo  '
+   const weeks = Math.max(1, Math.min(maxWeeks, Math.floor((width - LABEL_WIDTH) / COL_WIDTH) - 1));
 
-   const dayLabels = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+   const dayMap = new Map(summary.heatmapDays.map((entry) => [entry.date, entry]));
+   const today = new Date();
+   today.setHours(0, 0, 0, 0);
+   const start = new Date(today);
+   start.setDate(start.getDate() - start.getDay()); // align to last Sunday
+   start.setDate(start.getDate() - weeks * 7);
+
    const rows: string[] = [];
    rows.push(header('Crash Heatmap'));
-   rows.push('    ' + dayLabels.join(' '));
+   rows.push('');
 
+   // month labels along the x axis
+   let monthLine = ' '.repeat(LABEL_WIDTH);
+   let nextFreeIndex = 0;
+   let prevMonth = -1;
+   for (let week = 0; week <= weeks; week++) {
+      const weekStart = new Date(start);
+      weekStart.setDate(start.getDate() + week * 7);
+      const targetIndex = week * COL_WIDTH;
+
+      if (weekStart.getMonth() !== prevMonth && targetIndex >= nextFreeIndex) {
+         monthLine += ' '.repeat(targetIndex - nextFreeIndex);
+         const monthStr = weekStart.toLocaleString('default', { month: 'short' });
+         monthLine += monthStr.padEnd(COL_WIDTH * 3);
+         nextFreeIndex = targetIndex + COL_WIDTH * 3;
+         prevMonth = weekStart.getMonth();
+      }
+   }
+   rows.push(`${ncc('Dim')}${monthLine.trimEnd()}${ncc()}`);
+
+   // sparse day-of-week labels on the y axis
+   const dayLabels = ['', 'Mo', '', 'We', '', 'Fr', ''];
    for (let weekday = 0; weekday < 7; weekday++) {
-      let line = `${dayLabels[weekday]}  `;
-      for (let week = 0; week < weeks; week++) {
+      let line = `${ncc('Dim')}${dayLabels[weekday].padEnd(LABEL_WIDTH)}${ncc()}`;
+      for (let week = 0; week <= weeks; week++) {
          const date = new Date(start);
          date.setDate(start.getDate() + week * 7 + weekday);
-         const key = toDateKey(date);
-         const entry = dayMap.get(key);
+         if (date > today) {
+            line += '  ';
+            continue;
+         }
+         const entry = dayMap.get(toDateKey(date));
          line += renderHeatCell(entry?.bsod ?? 0, entry?.app ?? 0) + ' ';
       }
       rows.push(line.trimEnd());
@@ -135,41 +256,12 @@ function renderHeatCell(bsod: number, app: number): string {
    return `${ncc(mixed)}■${ncc()}`;
 }
 
-export function renderCardGrid(cards: string[], termWidth: number): string {
-   if (cards.length === 0) return '';
-   const colGap = 3;
-   const cols = termWidth >= 150 ? 3 : termWidth >= 100 ? 2 : 1;
-   if (cols === 1) return cards.join('\n\n');
-
-   const colWidth = Math.floor((termWidth - (cols - 1) * colGap) / cols);
-   const normalized = cards.map((card) =>
-      strWrap(card, colWidth, {
-         mode: 'softboundary',
-      }).split('\n')
-   );
-
-   const rows: string[] = [];
-   for (let i = 0; i < normalized.length; i += cols) {
-      const chunk = normalized.slice(i, i + cols);
-      const maxLines = Math.max(...chunk.map((lines) => lines.length));
-
-      for (let lineIndex = 0; lineIndex < maxLines; lineIndex++) {
-         const line = chunk
-            .map((lines) => {
-               const value = lines[lineIndex] ?? '';
-               return padAnsi(value, colWidth);
-            })
-            .join(' '.repeat(colGap));
-         rows.push(line);
-      }
-
-      rows.push('');
-   }
-
-   return rows.join('\n').trimEnd();
+/** Widest visible (ANSI-stripped) line in a multi-line block. */
+export function visibleWidth(block: string): number {
+   return Math.max(...block.split('\n').map((line) => stripAnsi(line).length), 0);
 }
 
-function padAnsi(value: string, target: number): string {
+export function padAnsi(value: string, target: number): string {
    const visible = stripAnsi(value).length;
    const pad = Math.max(0, target - visible);
    return value + ' '.repeat(pad);

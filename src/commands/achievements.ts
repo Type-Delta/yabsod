@@ -1,9 +1,9 @@
 import { ncc, strJustify, strWrap } from '@lib/Tools';
 
 import { CommandModule } from '@/common';
-import { achievementLabel, listAchievementStates, markAllAchievementsViewed, tierLabel } from '@/modules/achievements';
-import { progressBar, renderCardGrid } from '@/modules/render';
-import { quickPrint, terminalWidth } from '@/modules/shell';
+import { achievementLabel, listAchievementStates, markAllAchievementsViewed } from '@/modules/achievements';
+import { header, panel, panelGrid, progressBar } from '@/modules/render';
+import { contentWidth, quickPrint } from '@/modules/shell';
 
 const cmd: CommandModule = {
    async run(ctx) {
@@ -23,7 +23,7 @@ const cmd: CommandModule = {
       const locked = achievements.filter((item) => item.status === 'locked');
 
       if (listMode) {
-         const listDisplayWidth = Math.min(80, terminalWidth - 6);
+         const listDisplayWidth = Math.min(80, contentWidth - 6);
 
          for (const section of [
             { label: 'Recently Updated', entries: updated },
@@ -31,7 +31,7 @@ const cmd: CommandModule = {
             { label: 'Locked', entries: locked },
          ]) {
             if (section.entries.length === 0) continue;
-            quickPrint(`\n${ncc('Bright')}${section.label}${ncc()}`);
+            quickPrint(`\n${header(`${section.label} · ${section.entries.length}`)}\n`);
 
             for (const item of section.entries) {
                const goal = item.nextGoal ? item.nextGoal : item.currentGoal;
@@ -51,6 +51,7 @@ const cmd: CommandModule = {
             }
          }
       } else {
+         const cardWidth = 38;
          const blocks = achievements.map((item) => {
             const goal = item.nextGoal ? item.nextGoal : undefined;
             const compactProgress =
@@ -60,16 +61,16 @@ const cmd: CommandModule = {
                      ? 'done'
                      : `${item.progress}`;
 
-            return strWrap(
-               `${ncc('Bright')}${item.name}${ncc('White')} ${tierLabel(item.tier)}
-${ncc('Dim')}${item.status}${ncc()} | ${compactProgress}
-${item.afterCompletion || item.description}`,
-               34
+            return panel(
+               achievementLabel(item),
+               `${ncc('Dim')}${item.status} · ${compactProgress}${ncc()}\n` +
+               strWrap(item.afterCompletion || item.description, cardWidth - 4),
+               cardWidth
             );
          });
 
          quickPrint('');
-         quickPrint(renderCardGrid(blocks, process.stdout.columns || 100));
+         quickPrint(panelGrid(blocks, contentWidth, cardWidth));
       }
 
       await markAllAchievementsViewed();

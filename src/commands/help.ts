@@ -1,7 +1,9 @@
 import { ncc, strWrap } from '@lib/Tools';
 
 import { CommandModule } from '@/common';
-import { quickPrint } from '@/modules/shell';
+import { header, kv } from '@/modules/render';
+import { contentWidth, quickPrint } from '@/modules/shell';
+import { COLOR_PALETTE } from '@/consts';
 
 const cmd: CommandModule = {
    async run(ctx) {
@@ -9,34 +11,46 @@ const cmd: CommandModule = {
       const topic = ctx.args[0];
       if (topic && topic !== 'help' && commands[topic]) {
          const target = commands[topic];
-         quickPrint(`${ncc('Bright')}${ncc('Cyan')}yabsod ${topic}${ncc()}`);
-         quickPrint(`  ${target.help.short}`);
-         quickPrint(`  usage: ${target.help.usage}`);
+         quickPrint('');
+         quickPrint(header(`yabsod ${topic}`));
+         quickPrint('');
+         quickPrint(kv([
+            ['about', target.help.short],
+            ['usage', target.help.usage],
+         ], '  '));
          if (target.help.long) {
             quickPrint('');
-            quickPrint(strWrap(target.help.long, Math.max(60, (process.stdout.columns || 100) - 2)));
+            quickPrint(strWrap(target.help.long, Math.max(60, contentWidth - 2)));
          }
          return 0;
       }
 
-      quickPrint(`${ncc('Bright')}${ncc('Cyan')}YABSOD${ncc()} - Yet Another Blue Screen of Death`);
-      quickPrint('\nUsage:');
-      quickPrint('  yabsod <command> [options]');
-      quickPrint('\nCommands:');
+      quickPrint('');
+      quickPrint(`  ${ncc('Bright')}YABSOD${ncc()} ${ncc('Dim')}· Yet Another Blue Screen of Death${ncc()}`);
+      quickPrint('');
+      quickPrint(header('Usage'));
+      quickPrint('');
+      quickPrint(`  yabsod ${ncc(COLOR_PALETTE.teal300)}<command>${ncc()} ${ncc('Dim')}[options]${ncc()}`);
+      quickPrint('');
+      quickPrint(header('Commands'));
+      quickPrint('');
 
       for (const [name, mod] of Object.entries(commands)) {
          if (name === 'help') continue;
-         quickPrint(`  ${ncc('Yellow')}${name.padEnd(14)}${ncc()} ${mod.help.short}`);
+         quickPrint(`  ${ncc(COLOR_PALETTE.teal300)}${name.padEnd(14)}${ncc()} ${mod.help.short}`);
       }
 
-      quickPrint('  help           Show command help');
-      quickPrint('\nExamples:');
-      quickPrint('  yabsod jot --background');
-      quickPrint('  yabsod stats --range month');
-      quickPrint('  yabsod achievements --updated');
-      quickPrint('  yabsod list --since 30d --bsod');
-      quickPrint('  yabsod view ~1 --format md');
-      quickPrint('\nTip: yabsod help <command> for command-specific usage.');
+      quickPrint(`  ${ncc(COLOR_PALETTE.teal300)}${'help'.padEnd(14)}${ncc()} Show command help`);
+      quickPrint('');
+      quickPrint(header('Examples'));
+      quickPrint('');
+      quickPrint(`  yabsod jot --background`);
+      quickPrint(`  yabsod stats --range month`);
+      quickPrint(`  yabsod achievements --updated`);
+      quickPrint(`  yabsod list --since 30d --bsod`);
+      quickPrint(`  yabsod view ~1 --format md`);
+      quickPrint('');
+      quickPrint(`  ${ncc('Dim')}yabsod help <command> for command-specific usage.${ncc()}`);
       return 0;
    },
    help: {

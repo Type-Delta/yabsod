@@ -8,12 +8,15 @@ import {
    formatCount,
    header,
    horizontalBars,
+   kv,
+   panel,
+   panelGrid,
    progressBar,
-   renderCardGrid,
    renderHeatmap,
+   visibleWidth,
 } from '@/modules/render';
 import { formatHour } from '@/modules/date';
-import { quickPrint, warn } from '@/modules/shell';
+import { contentWidth, quickPrint, warn } from '@/modules/shell';
 import { TimeRange } from '@/types';
 import { COLOR_PALETTE } from '@/consts';
 
@@ -37,44 +40,80 @@ const cmd: CommandModule = {
          count: row.count,
       }));
 
+      const cardWidth = 40;
       const cards = [
-         `${header('Crash Totals')}
-  today: ${ncc('Yellow')}${formatCount(summary.totalToday)}${ncc()}
-  week: ${ncc('Yellow')}${formatCount(summary.totalWeek)}${ncc()}
-  month: ${ncc('Yellow')}${formatCount(summary.totalMonth)}${ncc()}
-  all-time: ${ncc('Yellow')}${formatCount(summary.totalAllTime)}${ncc()}`,
+         panel(
+            'Crash Totals',
+            kv([
+               ['today', `${ncc('Yellow')}${formatCount(summary.totalToday)}${ncc()}`],
+               ['week', `${ncc('Yellow')}${formatCount(summary.totalWeek)}${ncc()}`],
+               ['month', `${ncc('Yellow')}${formatCount(summary.totalMonth)}${ncc()}`],
+               ['all-time', `${ncc('Yellow')}${formatCount(summary.totalAllTime)}${ncc()}`],
+            ]),
+            cardWidth
+         ),
 
-         `${header('BSOD vs App Ratio')}
-  BSOD ${ncc(COLOR_PALETTE.blue600)}${summary.selectedRangeBsod}${ncc()} (${bsodPct}%)
-  APP  ${ncc(COLOR_PALETTE.rose600)}${summary.selectedRangeApp}${ncc()} (${appPct}%)`,
+         panel(
+            'BSOD vs App Ratio',
+            kv([
+               ['BSOD', `${ncc(COLOR_PALETTE.blue600)}${summary.selectedRangeBsod}${ncc()} (${bsodPct}%)`],
+               ['APP', `${ncc(COLOR_PALETTE.rose600)}${summary.selectedRangeApp}${ncc()} (${appPct}%)`],
+            ]),
+            cardWidth
+         ),
 
-         `${header('Uptime Flex')}
-  current: ${summary.currentUptimeDays} days
-  longest: ${summary.longestUptimeDays} days
-  ${progressBar(summary.currentUptimeDays, Math.max(1, summary.longestUptimeDays))}`,
+         panel(
+            'Uptime Flex',
+            kv([
+               ['current', `${summary.currentUptimeDays} days`],
+               ['longest', `${summary.longestUptimeDays} days`],
+            ]) +
+            `\n${progressBar(summary.currentUptimeDays, Math.max(1, summary.longestUptimeDays), { width: cardWidth - 6 })}`,
+            cardWidth
+         ),
 
-         `${header('Days Since Last BSOD')}
-  ${summary.daysSinceLastBsod < 0 ? 'no BSOD found in DB' : `${summary.daysSinceLastBsod} day(s)`}`,
+         panel(
+            'Days Since Last BSOD',
+            summary.daysSinceLastBsod < 0
+               ? `${ncc('Dim')}no BSOD found in DB${ncc()}`
+               : `${summary.daysSinceLastBsod} day(s)`,
+            cardWidth
+         ),
 
-         `${header('System Stability Score')}
-  ${ncc('Red')}2/10${ncc()} (as promised, permanently scuffed)`,
+         panel(
+            'System Stability Score',
+            `${ncc('Red')}2/10${ncc()} ${ncc('Dim')}(as promised, permanently scuffed)${ncc()}`,
+            cardWidth
+         ),
 
-         `${header('Meme Quote')}
-  ${quoteForCrashCount(summary.selectedRangeTotal)}`,
+         panel('Meme Quote', quoteForCrashCount(summary.selectedRangeTotal), cardWidth),
       ];
 
       quickPrint('');
-      quickPrint(`${header('YABSOD Stats')} ${ncc('Dim')}[range: ${range}]${ncc()}`);
-      quickPrint(renderCardGrid(cards, process.stdout.columns || 100));
-      quickPrint(renderHeatmap(summary, 52));
+      quickPrint(header(`YABSOD Stats · range: ${range}`));
       quickPrint('');
-      quickPrint(horizontalBars('Top Problem Hours', topHoursRows, { color: 0x0ea5e9, width: 24 }));
+      quickPrint(panelGrid(cards, contentWidth, cardWidth));
       quickPrint('');
-      quickPrint(horizontalBars('Top Crashed Apps', summary.topApps, { color: COLOR_PALETTE.rose600, width: 24 }));
+      quickPrint(renderHeatmap(summary, 52, contentWidth));
       quickPrint('');
-      quickPrint(horizontalBars('Top BugChecks', summary.topBugChecks, { color: COLOR_PALETTE.blue600, width: 24 }));
-      quickPrint('');
-      quickPrint(horizontalBars('Top BSOD Processes', summary.topProcesses, { color: 0x7c3aed, width: 24 }));
+
+      const chartLeft = [
+         horizontalBars('Top Problem Hours', topHoursRows, { color: 0x0ea5e9, width: 24 }),
+         horizontalBars('Top Crashed Apps', summary.topApps, { color: COLOR_PALETTE.rose600, width: 24 }),
+      ].join('\n\n');
+      const chartRight = [
+         horizontalBars('Top BugChecks', summary.topBugChecks, { color: COLOR_PALETTE.blue600, width: 24 }),
+         horizontalBars('Top BSOD Processes', summary.topProcesses, { color: 0x7c3aed, width: 24 }),
+      ].join('\n\n');
+
+      const chartWidth = Math.max(visibleWidth(chartLeft), visibleWidth(chartRight));
+      if (contentWidth >= chartWidth * 2 + 2) {
+         quickPrint(panelGrid([chartLeft, chartRight], contentWidth, chartWidth));
+      } else {
+         quickPrint(chartLeft);
+         quickPrint('');
+         quickPrint(chartRight);
+      }
 
       if (summary.selectedRangeTotal === 0) {
          warn('No crashes found for this range yet. Run `yabsod jot` first to import events.');
