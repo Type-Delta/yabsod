@@ -112,8 +112,8 @@ const DEFINITIONS: Definition[] = [
       progress: (ctx) => (ctx.bugcheckHitSet.has('WINLOGON_FATAL_ERROR') ? 1 : 0),
    },
    {
-      key: 'plank_frames_per_second',
-      name: 'Plank Frames Per Second',
+      key: 'planck_frames_per_second',
+      name: 'Planck Frames Per Second',
       tiers: [1],
       description: () => 'See VIDEO_TDR_FAILURE once',
       progress: (ctx) => (ctx.bugcheckHitSet.has('VIDEO_TDR_FAILURE') ? 1 : 0),
